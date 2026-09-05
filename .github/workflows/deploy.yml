@@ -57,7 +57,7 @@ jobs:
       ACR_NAME: ${{ vars.ACR_NAME }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Azure login (OIDC, no secret)
         uses: azure/login@v2
@@ -101,7 +101,7 @@ jobs:
       # Phases 3-5: the SQL server is publicly reachable (firewall: Azure services + your IP), so the
       # runner can apply migrations directly. The deploy identity is the server's Entra admin, and
       # "Active Directory Default" picks up the `az login` credential from the previous step.
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
