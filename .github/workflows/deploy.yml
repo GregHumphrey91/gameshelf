@@ -1,0 +1,205 @@
+# Deploy to Azure — manual trigger only until Phase 4 is complete.
+#
+# STATUS: scaffolding. This workflow will fail until:
+#   Phase 3  infra/scripts/bootstrap.ps1 has created the resource group, identities and roles
+#   Phase 4  the federated credential exists (deploy with githubRepository=<owner>/gameshelf) and the
+#            GitHub Environment "dev" defines the variables listed under `env:` below
+#
+# There are NO secrets in this workflow. Authentication is OIDC federation: GitHub mints a short-lived
+# token whose subject is "repo:<owner>/<repo>:environment:dev", Azure exchanges it for the deploy
+# identity. If that subject does not match the federated credential exactly you get AADSTS70021.
+#
+# Steps:
+#   1. az login (OIDC)
+#   2. az acr build — images are built in Azure, tagged with the commit SHA
+#   3. az deployment group create — idempotent Bicep re-run with the new image tags
+#   4. Migrations — an EF Core migration bundle run from the runner (SQL is public in Phases 3-5).
+#      Phase 6 replaces this with an Azure Container Instance inside the VNet (see the bottom of this file).
+#   5. Roll the API out: direct (Phases 3-4) or via the staging slot + health-gated swap (Phase 5)
+
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub Environment / Azure environment name
+        type: choice
+        options: [dev]
+        default: dev
+      use_staging_slot:
+        description: Deploy the API to the staging slot and swap (Phase 5). Requires enableStagingSlot=true in Bicep.
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write # required for OIDC
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_VERSION: 8.0.x
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    # The environment name is part of the OIDC subject claim — it must be declared here.
+    environment: ${{ inputs.environment }}
+    env:
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC, no secret)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # ------------------------------------------------------------------ images
+      - name: Build API image in ACR
+        run: >-
+          az acr build --registry "$ACR_NAME"
+          --image "gameshelf-api:${IMAGE_TAG}" --image gameshelf-api:latest
+          --file src/GameShelf.Api/Dockerfile .
+
+      - name: Build web image in ACR
+        run: >-
+          az acr build --registry "$ACR_NAME"
+          --image "gameshelf-web:${IMAGE_TAG}" --image gameshelf-web:latest
+          src/gameshelf-web
+
+      # ------------------------------------------------------------------ infrastructure
+      - name: Deploy Bicep
+        id: bicep
+        run: |
+          LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer --output tsv)
+          az deployment group create \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "deploy-${IMAGE_TAG::7}-$(date +%Y%m%d%H%M%S)" \
+            --parameters "infra/bicep/env/${{ inputs.environment }}.bicepparam" \
+            --parameters \
+              apiImage="${LOGIN_SERVER}/gameshelf-api:${IMAGE_TAG}" \
+              webImage="${LOGIN_SERVER}/gameshelf-web:${IMAGE_TAG}" \
+              githubRepository="${{ github.repository }}" \
+              enableStagingSlot=${{ inputs.use_staging_slot }} \
+            --query properties.outputs --output json > outputs.json
+
+          jq -r 'to_entries[] | "\(.key)=\(.value.value)"' outputs.json >> "$GITHUB_OUTPUT"
+
+      # ------------------------------------------------------------------ database
+      # Phases 3-5: the SQL server is publicly reachable (firewall: Azure services + your IP), so the
+      # runner can apply migrations directly. The deploy identity is the server's Entra admin, and
+      # "Active Directory Default" picks up the `az login` credential from the previous step.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Allow runner through SQL firewall (temporary)
+        run: |
+          RUNNER_IP=$(curl -s https://api.ipify.org)
+          echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
+          az sql server firewall-rule create --resource-group "$AZURE_RESOURCE_GROUP" \
+            --server "${{ steps.bicep.outputs.sqlServerName }}" --name "gh-runner-${IMAGE_TAG::7}" \
+            --start-ip-address "$RUNNER_IP" --end-ip-address "$RUNNER_IP" --output none
+
+      - name: Apply EF Core migrations
+        env:
+          CONNECTION: "Server=tcp:${{ steps.bicep.outputs.sqlServerFqdn }},1433;Initial Catalog=${{ steps.bicep.outputs.sqlDatabaseName }};Authentication=Active Directory Default;Encrypt=True;"
+        run: |
+          dotnet tool restore
+          dotnet ef migrations bundle --project src/GameShelf.Api --configuration Release --self-contained -r linux-x64 -o efbundle
+          ./efbundle --connection "$CONNECTION"
+
+      - name: Grant the runtime identity database access
+        env:
+          CONNECTION: "Server=tcp:${{ steps.bicep.outputs.sqlServerFqdn }},1433;Initial Catalog=${{ steps.bicep.outputs.sqlDatabaseName }};Authentication=Active Directory Default;Encrypt=True;"
+          RUNTIME_IDENTITY: ${{ steps.bicep.outputs.runtimeIdentityName }}
+        run: |
+          # Idempotent: creates the contained database user for the runtime managed identity.
+          # No password — the user maps to the identity's Entra object.
+          cat > grant.sql <<EOF
+          IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '${RUNTIME_IDENTITY}')
+            CREATE USER [${RUNTIME_IDENTITY}] FROM EXTERNAL PROVIDER;
+          ALTER ROLE db_datareader ADD MEMBER [${RUNTIME_IDENTITY}];
+          ALTER ROLE db_datawriter ADD MEMBER [${RUNTIME_IDENTITY}];
+          EOF
+          curl -sSL https://aka.ms/sqlcmd-linux-amd64 | tar xz sqlcmd
+          ./sqlcmd --authentication-method ActiveDirectoryDefault \
+            -S "tcp:${{ steps.bicep.outputs.sqlServerFqdn }},1433" -d "${{ steps.bicep.outputs.sqlDatabaseName }}" -i grant.sql
+
+      - name: Remove runner firewall rule
+        if: always()
+        run: >-
+          az sql server firewall-rule delete --resource-group "$AZURE_RESOURCE_GROUP"
+          --server "${{ steps.bicep.outputs.sqlServerName }}" --name "gh-runner-${IMAGE_TAG::7}" --output none || true
+
+      # ------------------------------------------------------------------ rollout
+      # `az webapp config set --linux-fx-version` changes only the image reference. (Avoid
+      # `az webapp config container set`, which can overwrite the managed-identity pull settings.)
+      - name: Roll out API (direct)
+        if: ${{ !inputs.use_staging_slot }}
+        run: |
+          LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer --output tsv)
+          az webapp config set --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "${{ steps.bicep.outputs.apiAppName }}" \
+            --linux-fx-version "DOCKER|${LOGIN_SERVER}/gameshelf-api:${IMAGE_TAG}" --output none
+
+      - name: Roll out API (staging slot + health-gated swap)
+        if: ${{ inputs.use_staging_slot }}
+        run: |
+          LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer --output tsv)
+          az webapp config set --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "${{ steps.bicep.outputs.apiAppName }}" --slot staging \
+            --linux-fx-version "DOCKER|${LOGIN_SERVER}/gameshelf-api:${IMAGE_TAG}" --output none
+
+          # Azure pings WEBSITE_SWAP_WARMUP_PING_PATH (/health/ready) on the staging slot and only
+          # swaps if it returns one of WEBSITE_SWAP_WARMUP_PING_STATUSES. A build whose readiness
+          # check fails is rejected here and never reaches production.
+          az webapp deployment slot swap --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "${{ steps.bicep.outputs.apiAppName }}" \
+            --slot staging --target-slot production
+
+      - name: Roll out web
+        run: |
+          LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer --output tsv)
+          az webapp config set --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "${{ steps.bicep.outputs.webAppName }}" \
+            --linux-fx-version "DOCKER|${LOGIN_SERVER}/gameshelf-web:${IMAGE_TAG}" --output none
+
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS "${{ steps.bicep.outputs.apiUrl }}/health/ready"; then echo; echo "API healthy"; exit 0; fi
+            sleep 10
+          done
+          echo "API never became healthy"; exit 1
+
+# ---------------------------------------------------------------------------------------------
+# PHASE 6 — private SQL. Once publicNetworkAccess is Disabled the runner has no route to the
+# database, so the three database steps above are replaced by an ephemeral container inside
+# the VNet. Sketch (not yet runnable):
+#
+#   - name: Run migrations from inside the VNet
+#     run: |
+#       az container create --resource-group "$AZURE_RESOURCE_GROUP" --name "migrate-${IMAGE_TAG::7}" \
+#         --image "${LOGIN_SERVER}/gameshelf-migrate:${IMAGE_TAG}" \
+#         --subnet <snet-migration id> --assign-identity <deploy identity id> \
+#         --acr-identity <deploy identity id> --restart-policy Never \
+#         --environment-variables CONNECTION="...Authentication=Active Directory Managed Identity;User Id=<deploy clientId>;"
+#       az container attach ... ; check exit code
+#       az container delete --yes ...
+#
+# gameshelf-migrate is a small image containing the EF bundle (`dotnet ef migrations bundle`) and
+# grant.sql. Prerequisite: az provider register --namespace Microsoft.ContainerInstance --wait
+# ---------------------------------------------------------------------------------------------

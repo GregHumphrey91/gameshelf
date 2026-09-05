@@ -1,0 +1,36 @@
+{
+  "name": "gameshelf",
+  "private": true,
+  "description": "Root task runner. Every script works from any shell (cmd, PowerShell, Git Bash, CI).",
+  "scripts": {
+    "setup": "dotnet tool restore && dotnet restore GameShelf.sln && npm --prefix src/gameshelf-web ci --no-audit --no-fund && npm --prefix src/gameshelf-web run playwright:install",
+
+    "db:up": "docker compose up -d --wait sqlserver",
+    "db:down": "docker compose stop sqlserver",
+    "db:reset": "docker compose down -v && npm run db:up",
+
+    "dev": "docker compose up --build",
+    "dev:down": "docker compose down",
+    "dev:api": "npm run db:up && dotnet run --project src/GameShelf.Api",
+    "dev:web": "npm --prefix src/gameshelf-web run dev",
+
+    "build": "dotnet build GameShelf.sln && npm --prefix src/gameshelf-web run build",
+    "lint": "npm --prefix src/gameshelf-web run lint && npm --prefix src/gameshelf-web run typecheck",
+
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "npm run test:backend:unit && npm run test:backend:integration",
+    "test:backend:unit": "dotnet test tests/GameShelf.Api.Tests",
+    "test:backend:integration": "npm run db:up && dotnet test tests/GameShelf.Api.IntegrationTests",
+    "test:frontend": "npm --prefix src/gameshelf-web test",
+    "test:e2e": "npm run db:up && npm --prefix src/gameshelf-web run test:e2e",
+    "test:all": "npm test && npm run test:e2e",
+
+    "test:docker": "node scripts/docker-test.mjs all",
+    "test:docker:backend": "node scripts/docker-test.mjs backend",
+    "test:docker:frontend": "node scripts/docker-test.mjs frontend",
+    "test:docker:e2e": "node scripts/docker-test.mjs e2e",
+    "test:docker:down": "docker compose -f docker-compose.test.yml --profile backend --profile frontend --profile e2e down --volumes --remove-orphans",
+
+    "bicep:build": "az bicep build --file infra/bicep/main.bicep && az bicep build-params --file infra/bicep/env/dev.bicepparam"
+  }
+}

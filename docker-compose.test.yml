@@ -1,0 +1,106 @@
+# Test stack — every suite runs inside a container, so the only host prerequisite is Docker.
+#
+#   npm run test:docker             all three suites, one after another
+#   npm run test:docker:backend     unit + contract + integration   sqlserver → backend-tests
+#   npm run test:docker:frontend    Vitest                           frontend-tests
+#   npm run test:docker:e2e         Playwright                       sqlserver → api → web → e2e
+#
+# Those scripts call scripts/docker-test.mjs, which runs
+#   docker compose -f docker-compose.test.yml --profile <suite> up --build --abort-on-container-exit --exit-code-from <runner>
+# and always tears the stack down afterwards. The runner container's exit code becomes the command's exit code.
+#
+# Design notes
+#   - Own project name and no published ports: it never collides with the dev stack (docker-compose.yml),
+#     even while that stack is running.
+#   - SQL Server is ephemeral (no volume). Every run starts from an empty server.
+#   - The SQL healthcheck creates a marker database once. `SELECT 1` succeeds before SQL Server 2022 has
+#     finished upgrading its system databases, and DDL fails until then — a successful CREATE DATABASE is
+#     the only reliable "ready for migrations" signal.
+#   - Every service that starts is either long-running or the runner itself. A one-shot helper container
+#     exiting 0 would trip --abort-on-container-exit and stop the stack mid-run.
+#   - Results come out through bind mounts: test-results/backend/*.trx and src/gameshelf-web/playwright-report/.
+
+name: gameshelf-test
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    profiles: [backend, e2e]
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_TEST_SA_PASSWORD:-GameShelf_Test_Pa55word!}
+      MSSQL_PID: Developer
+    healthcheck:
+      # -b: a SQL error (e.g. Msg 904 while system databases are still upgrading) makes sqlcmd exit non-zero.
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -b -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"IF DB_ID('gameshelf_ready') IS NULL CREATE DATABASE gameshelf_ready;\" || exit 1"]
+      interval: 5s
+      timeout: 20s
+      retries: 36
+      start_period: 20s
+
+  # ---- backend: unit + contract + integration ------------------------------
+  backend-tests:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile
+    profiles: [backend]
+    environment:
+      GAMESHELF_TEST_CONNECTION_STRING: "Server=sqlserver,1433;Database=gameshelf_test;User Id=sa;Password=${MSSQL_TEST_SA_PASSWORD:-GameShelf_Test_Pa55word!};TrustServerCertificate=True;Encrypt=False"
+      TEST_SUITES: unit integration
+      RESULTS_DIR: /results
+    volumes:
+      - ./test-results/backend:/results
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
+  # ---- frontend: Vitest ---------------------------------------------------
+  frontend-tests:
+    build:
+      context: src/gameshelf-web
+      target: test
+    profiles: [frontend]
+    environment:
+      CI: "true"
+
+  # ---- e2e: Playwright against the real images ------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: src/GameShelf.Api/Dockerfile
+    profiles: [e2e]
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__GameShelf: "Server=sqlserver,1433;Database=gameshelf_e2e;User Id=sa;Password=${MSSQL_TEST_SA_PASSWORD:-GameShelf_Test_Pa55word!};TrustServerCertificate=True;Encrypt=False"
+      Database__MigrateOnStartup: "true"
+      # The browser runs inside the e2e container and loads the SPA from http://web.
+      Cors__AllowedOrigins__0: http://web
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
+  web:
+    build:
+      context: src/gameshelf-web
+    profiles: [e2e]
+    environment:
+      # Browser-side URL of the API. The browser is in the e2e container, on this compose network.
+      API_BASE_URL: http://api:8080
+    depends_on:
+      - api
+
+  e2e:
+    build:
+      context: src/gameshelf-web
+      dockerfile: Dockerfile.e2e
+    profiles: [e2e]
+    environment:
+      # Setting E2E_BASE_URL tells playwright.config.ts not to start servers of its own.
+      E2E_BASE_URL: http://web
+      API_READY_URL: http://api:8080/health/ready
+    volumes:
+      - ./src/gameshelf-web/playwright-report:/app/playwright-report
+      - ./src/gameshelf-web/test-results:/app/test-results
+    depends_on:
+      - api
+      - web

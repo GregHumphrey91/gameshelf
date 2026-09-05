@@ -1,0 +1,18 @@
+# Build context for src/GameShelf.Api/Dockerfile and tests/Dockerfile is the repo root.
+# Host build output must never enter the image build: obj/project.assets.json contains host paths.
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/coverage/
+**/test-results/
+**/playwright-report/
+.git/
+.github/
+infra/
+scripts/
+docs/
+*.md
+.env
+.env.*
+!.env.example

@@ -1,0 +1,57 @@
+# Local development stack. Nothing here is used in cloud environments.
+#
+#   docker compose up -d sqlserver      # just the database (inner dev loop: dotnet run + npm run dev)
+#   docker compose up --build           # full stack: SQL Server + API image + web image
+#
+# Ports: web http://localhost:3000, api http://localhost:8080, sql localhost,1433
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: gameshelf-sql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-GameShelf_Dev_Pa55word!}
+      MSSQL_PID: Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - gameshelf-sql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  api:
+    build:
+      context: .
+      dockerfile: src/GameShelf.Api/Dockerfile
+    container_name: gameshelf-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__GameShelf: "Server=sqlserver,1433;Database=gameshelf;User Id=sa;Password=${MSSQL_SA_PASSWORD:-GameShelf_Dev_Pa55word!};TrustServerCertificate=True;Encrypt=False"
+      Database__MigrateOnStartup: "true"
+      Cors__AllowedOrigins__0: http://localhost:5173
+      Cors__AllowedOrigins__1: http://localhost:3000
+    ports:
+      - "8080:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
+  web:
+    build:
+      context: src/gameshelf-web
+    container_name: gameshelf-web
+    environment:
+      # Browser-side URL of the API (the SPA runs in your browser, not in this container).
+      API_BASE_URL: http://localhost:8080
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+volumes:
+  gameshelf-sql-data:

@@ -1,0 +1,36 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+coverage/
+
+# Test output (root: test-results/backend from the container run; src/gameshelf-web: Playwright)
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Docker
+docker-compose.override.yml
+
+# OS / editor
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
