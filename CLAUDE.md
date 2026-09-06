@@ -44,7 +44,17 @@ npm run lint / npm run build / npm run bicep:build
 - `/health/ready` must do a real database round-trip (`SqlReadinessProbe`). It gates deployment-slot swaps; a stubbed version would defeat the point.
 - Do not enable `InvariantGlobalization` — `Microsoft.Data.SqlClient` throws at connect time.
 - Migrations: `dotnet ef migrations add <Name> --project src/GameShelf.Api --output-dir Data/Migrations`. Startup applies them only when `Database:MigrateOnStartup=true` (local dev). Cloud applies them in the deploy workflow.
-- Configuration keys: `ConnectionStrings:GameShelf`, `Cors:AllowedOrigins`, `Database:MigrateOnStartup`. Environment-variable form uses `__` (e.g. `ConnectionStrings__GameShelf`).
+- Configuration keys: `ConnectionStrings:GameShelf`, `Cors:AllowedOrigins`, `Database:MigrateOnStartup`, `Auth:Enabled`, `Auth:Issuer`, `Auth:Audience`, `Auth:BootstrapCurators`. Environment-variable form uses `__` (e.g. `ConnectionStrings__GameShelf`).
+
+## Auth conventions
+
+- Tokens prove *who*; the `Users` table decides *what*. `RoleClaimsTransformation` adds a `gameshelf:role` claim from `IUserRoleResolver` (database lookup by `sub`). Never read a role from a token claim; never grant access to a subject that has no row.
+- Policies: `AuthPolicies.Reader` (Reader or Curator) on the controller, `AuthPolicies.Curator` on writes. The fallback policy requires authentication, so a new controller is protected by default; only health endpoints carry `[AllowAnonymous]`.
+- `Auth:Enabled=false` = local mode: `DisabledAuthenticationHandler` signs everybody in as `local-dev`/Curator. It is the default in Development and in every test stack, and it throws at startup in Production. Contract tests use their own `TestAuthHandler` (`X-Test-Subject` header) with `FakeRoleResolver` so they can exercise 401/403 without a token.
+- `Auth:BootstrapCurators` lists subjects/emails that get a Curator row on first sign-in. It is how the first account gets in; everything after that is data.
+- Issuer and client id are public identifiers, not secrets, but they are per-org: local values live in `dotnet user-secrets` / `src/gameshelf-web/.env.local` / `.env`, cloud values in GitHub Environment *variables* and Bicep parameters. Nothing auth-related is committed.
+- SPA: `src/auth/` wraps the identity-provider SDK behind the `AuthClient` interface; React only sees `AuthProvider` + `useAuth`. The API layer gets its token through `setAccessTokenProvider` (`src/api/token.ts`) so `src/api/` stays framework-free. No router: the callback path (`/login/callback`) is handled at boot by `authClient.start()`.
+- The SPA decides what to render from `GET /api/me` (`useCurrentUser`), never from the token. Readers see the collection without the form or the actions column (`GameList canEdit`).
 
 ## Test taxonomy (backend)
 
@@ -63,8 +73,9 @@ New endpoint → add a contract test for its shape and an integration test for i
 - Import via `@/…`, never deep relative paths.
 - Every interactive element has a `data-testid`; Playwright selects by test id.
 - Unit tests are colocated (`X.test.tsx`) and use MSW (`src/test/handlers.ts`). `onUnhandledRequest: 'error'` — never mock `fetch` directly.
+- Render `App` through `renderApp()` from `src/test/auth.tsx` (defaults to local mode); use `FakeAuthClient` + `setCurrentUser()` for signed-out / no-access / Reader / Curator states.
 - E2E specs create data with a unique title per run and delete what they create.
-- Production image: nginx; `docker-entrypoint.sh` writes `runtime-config.js` from `API_BASE_URL`. Never bake environment URLs into the build.
+- Production image: nginx; `docker-entrypoint.sh` writes `runtime-config.js` from `API_BASE_URL`, `OKTA_ISSUER`, `OKTA_CLIENT_ID`. Never bake environment URLs into the build.
 
 ## Infrastructure conventions
 
@@ -72,7 +83,7 @@ New endpoint → add a contract test for its shape and an integration test for i
 - Role assignments are **not** in Bicep (`infra/scripts/bootstrap.ps1` does them) so a Contributor-only pipeline identity can re-run the template.
 - SQL is Entra-only; the admin is set by `principalId`. The runtime connection string uses the runtime identity's `clientId` as `User Id`.
 - Phase 6 modules (`network.bicep`, `privateEndpoint.bicep`) exist but are not referenced until that phase.
-- `deploy.yml` is `workflow_dispatch` only and has no secrets — cloud auth is OIDC via the `dev` GitHub Environment's variables.
+- `deploy.yml` is `workflow_dispatch` only and has no secrets — cloud auth is OIDC via the `dev` GitHub Environment's variables. The same variables carry `OKTA_ISSUER`, `OKTA_CLIENT_ID`, `BOOTSTRAP_CURATOR` into Bicep; the API app always runs with `Auth__Enabled=true`.
 
 ## Cost rule
 
@@ -80,4 +91,4 @@ The Azure credit expires 2026-09-21. Any session that creates cloud resources en
 
 ## Phase status
 
-Phase 0 tooling ✅ · Phase 1 ✅ · Phases 2-7 see `PROJECT_PLAN.md`.
+Phase 0 tooling ✅ · Phase 1 ✅ · Phase 2 ✅ (code; real sign-in verified by hand) · Phases 3-7 see `PROJECT_PLAN.md`.

@@ -40,6 +40,8 @@ export default defineConfig({
         ASPNETCORE_ENVIRONMENT: 'Development',
         Database__MigrateOnStartup: 'true',
         Cors__AllowedOrigins__0: 'http://localhost:5173',
+        // E2E runs in local mode: no identity provider, every caller is a local Curator.
+        Auth__Enabled: 'false',
       },
       stdout: 'ignore',
       stderr: 'pipe',

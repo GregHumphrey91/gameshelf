@@ -33,6 +33,60 @@ npm run dev          # docker compose up --build → web http://localhost:3000, 
 The local SQL `sa` password is `GameShelf_Dev_Pa55word!` (override with a `.env` file — see
 `.env.example`). It exists only for the local container; cloud environments have no SQL passwords at all.
 
+Both ways run in **local mode**: no sign-in, and the API treats every request as a local Curator.
+
+## Sign-in and roles
+
+Sign-in is OpenID Connect with Authorization Code + PKCE against an Okta org. The SPA is a public
+client (no secret anywhere); it sends the access token as `Authorization: Bearer`, and the API validates
+the token's issuer, audience and signature (keys fetched from the issuer's JWKS endpoint).
+
+**What a token gets you is decided by the API's own `Users` table, not by token claims.**
+
+| Caller | Result |
+|---|---|
+| No / invalid token | 401 on every `/api/*` route (health endpoints stay anonymous) |
+| Valid token, subject not in `Users` | 403 (`/api/me` still answers, with `role: null`, so the SPA can say "no access yet") |
+| `Users.Role = Reader` | GET `/api/games` |
+| `Users.Role = Curator` | everything |
+
+The first account is created automatically: any subject or email listed in `Auth:BootstrapCurators`
+gets a `Curator` row on its first sign-in. After that, rows are managed in the database.
+
+### Local mode (default)
+
+`Auth:Enabled=false` (set in `appsettings.Development.json`) swaps the JWT handler for one that
+authenticates everybody as `local-dev` with the `Curator` role, and the SPA hides the sign-in controls
+when it has no issuer/client id. Every test suite runs this way. The API refuses to start in local mode
+when `ASPNETCORE_ENVIRONMENT=Production`.
+
+### Signing in with a real identity provider
+
+You need, from your Okta org: the **issuer** (default authorization server:
+`https://<org>.okta.com/oauth2/default`) and the **client id** of a Single-Page App whose sign-in
+redirect URIs include `http://localhost:5173/login/callback` and `http://localhost:3000/login/callback`
+and whose sign-out redirect URIs include `http://localhost:5173` and `http://localhost:3000`.
+Both values are public identifiers; keep them out of the repo anyway because they are per-org.
+
+Inner loop (`npm run dev:api` / `npm run dev:web`):
+
+```powershell
+# API — user secrets override appsettings.Development.json and are stored outside the repo
+dotnet user-secrets set Auth:Enabled true                                   --project src/GameShelf.Api
+dotnet user-secrets set Auth:Issuer https://<org>.okta.com/oauth2/default   --project src/GameShelf.Api
+dotnet user-secrets set Auth:BootstrapCurators:0 you@example.com            --project src/GameShelf.Api
+
+# SPA — src/gameshelf-web/.env.local (git-ignored)
+VITE_OKTA_ISSUER=https://<org>.okta.com/oauth2/default
+VITE_OKTA_CLIENT_ID=<client id>
+```
+
+Back to local mode: `dotnet user-secrets clear --project src/GameShelf.Api` and delete `.env.local`.
+
+Containers (`npm run dev`): set `AUTH_ENABLED`, `OKTA_ISSUER`, `OKTA_CLIENT_ID` and `BOOTSTRAP_CURATOR`
+in `.env` (see `.env.example`). The web image reads `OKTA_ISSUER` / `OKTA_CLIENT_ID` at container start,
+like `API_BASE_URL`, so the same image serves every environment.
+
 ## Tests
 
 All commands run from the repository root (`package.json` is the task runner) and start the SQL
@@ -72,15 +126,16 @@ containers), `npm run dev:api` / `dev:web` (hot-reload servers on :8080 / :5173)
 
 ## API
 
-| Method | Route | Notes |
-|---|---|---|
-| GET | `/api/games` | newest first |
-| GET | `/api/games/{id}` | 404 if missing |
-| POST | `/api/games` | 201 + `Location`; 400 problem+json on validation errors |
-| PUT | `/api/games/{id}` | 204 / 404 |
-| DELETE | `/api/games/{id}` | 204 / 404 |
-| GET | `/health/live` | always 200 |
-| GET | `/health/ready` | 200 only if `SELECT 1` succeeds against the database, else 503 |
+| Method | Route | Requires | Notes |
+|---|---|---|---|
+| GET | `/api/me` | signed in | `{ subject, email, role }`; `role` is null for unknown accounts |
+| GET | `/api/games` | Reader | newest first |
+| GET | `/api/games/{id}` | Reader | 404 if missing |
+| POST | `/api/games` | Curator | 201 + `Location`; 400 problem+json on validation errors |
+| PUT | `/api/games/{id}` | Curator | 204 / 404 |
+| DELETE | `/api/games/{id}` | Curator | 204 / 404 |
+| GET | `/health/live` | — | always 200 |
+| GET | `/health/ready` | — | 200 only if `SELECT 1` succeeds against the database, else 503 |
 
 ## Database migrations
 
@@ -95,8 +150,8 @@ In cloud environments migrations are applied by the deploy workflow, never on ap
 ## Layout
 
 ```
-src/GameShelf.Api           API (Controllers, Data, Models, Health, Auth)
-src/gameshelf-web           SPA (src/api, components, hooks, test, types; e2e/); Dockerfile.e2e = Playwright runner
+src/GameShelf.Api           API (Controllers, Data, Models, Health, Auth = JWT bearer + role resolution from the Users table)
+src/gameshelf-web           SPA (src/api, auth, components, hooks, test, types; e2e/); Dockerfile.e2e = Playwright runner
 tests/                      GameShelf.Api.Tests (unit + contract), GameShelf.Api.IntegrationTests; Dockerfile = backend runner
 scripts/                    docker-test.mjs — runs the suites in docker-compose.test.yml
 infra/                      Bicep modules, bootstrap/teardown scripts

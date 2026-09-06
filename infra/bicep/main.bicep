@@ -58,6 +58,18 @@ param githubEnvironment string = environmentName
 @description('Create the "staging" deployment slot on the API app (Phase 5). Requires a Standard+ plan.')
 param enableStagingSlot bool = false
 
+@description('OpenID Connect issuer that signs access tokens, e.g. https://<org>.okta.com/oauth2/default. Public identifier, not a secret.')
+param oktaIssuer string
+
+@description('Client id of the Single-Page App registered with the issuer. Public identifier (PKCE) — there is no client secret anywhere.')
+param oktaClientId string
+
+@description('Audience the API expects in access tokens (the authorization server\'s audience).')
+param authAudience string = 'api://default'
+
+@description('Email or subject of the account to create as the first Curator on its first sign-in. Empty = nobody is bootstrapped.')
+param bootstrapCurator string = ''
+
 @description('Tags applied to every resource.')
 param tags object = {
   project: baseName
@@ -167,6 +179,9 @@ module api 'modules/appService-api.bicep' = {
     sqlConnectionString: sqlConnectionString
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     allowedCorsOrigin: webUrl
+    authIssuer: oktaIssuer
+    authAudience: authAudience
+    bootstrapCurator: bootstrapCurator
     enableStagingSlot: enableStagingSlot
   }
 }
@@ -182,6 +197,8 @@ module web 'modules/appService-web.bicep' = {
     runtimeIdentityClientId: identity.outputs.runtimeClientId
     image: webImage
     apiBaseUrl: apiUrl
+    oktaIssuer: oktaIssuer
+    oktaClientId: oktaClientId
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
   }
 }

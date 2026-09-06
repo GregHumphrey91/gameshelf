@@ -1,7 +1,9 @@
 using System.Text.Json.Serialization;
+using GameShelf.Api.Auth;
 using GameShelf.Api.Data;
 using GameShelf.Api.Health;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,6 +30,8 @@ builder.Services.AddScoped<IGameRepository, GameRepository>();
 builder.Services.AddScoped<IReadinessProbe, SqlReadinessProbe>();
 builder.Services.AddSingleton(TimeProvider.System);
 
+builder.Services.AddGameShelfAuth(builder.Configuration, builder.Environment);
+
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
@@ -40,6 +44,11 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+if (!app.Services.GetRequiredService<IOptions<AuthOptions>>().Value.Enabled)
+{
+    app.Logger.LogWarning("Authentication is DISABLED (Auth:Enabled=false): every request runs as a local Curator");
+}
 
 // --- Startup migrations (local dev convenience only) ------------------------
 // In cloud environments migrations are a separate, explicit pipeline step.
@@ -61,6 +70,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 app.Run();

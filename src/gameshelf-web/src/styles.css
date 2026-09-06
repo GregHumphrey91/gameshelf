@@ -52,8 +52,25 @@ body {
 }
 
 .app__summary {
-  margin: 0;
+  margin: 0.25rem 0 0;
   color: var(--muted);
+}
+
+.auth-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.2rem;
+}
+
+.auth-bar__note {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.badge--role {
+  background: var(--accent);
+  color: #fff;
 }
 
 .card {

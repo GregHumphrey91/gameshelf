@@ -12,5 +12,14 @@ param enableStagingSlot = false
 param clientIpAddress = ''
 param githubRepository = ''
 
+// Sign-in. The issuer and client id are public identifiers (PKCE), but they are per-org, so the
+// deploy workflow supplies them from the GitHub Environment variables OKTA_ISSUER / OKTA_CLIENT_ID /
+// BOOTSTRAP_CURATOR. For a manual deploy pass them the same way:
+//   --parameters oktaIssuer=https://<org>.okta.com/oauth2/default oktaClientId=<id> bootstrapCurator=<your email>
+param oktaIssuer = ''
+param oktaClientId = ''
+param authAudience = 'api://default'
+param bootstrapCurator = ''
+
 // Images are supplied by the deploy workflow (--parameters apiImage=... webImage=...).
 // The defaults in main.bicep are public placeholders for the very first deploy.

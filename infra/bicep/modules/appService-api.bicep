@@ -19,6 +19,15 @@ param appInsightsConnectionString string
 @description('Origin the SPA is served from, allowed via CORS.')
 param allowedCorsOrigin string
 
+@description('OpenID Connect issuer whose tokens the API accepts. Signing keys are fetched from its JWKS endpoint.')
+param authIssuer string
+
+@description('Audience expected in access tokens.')
+param authAudience string = 'api://default'
+
+@description('Email or subject auto-created as the first Curator on first sign-in. Empty = none.')
+param bootstrapCurator string = ''
+
 param enableStagingSlot bool = false
 
 // Shared by the production site and the slot so they never drift apart.
@@ -40,6 +49,11 @@ var siteConfig = {
     { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
     { name: 'Cors__AllowedOrigins__0', value: allowedCorsOrigin }
     { name: 'Database__MigrateOnStartup', value: 'false' }
+    // Sign-in is mandatory in the cloud: the API refuses to start with Auth__Enabled=false in Production.
+    { name: 'Auth__Enabled', value: 'true' }
+    { name: 'Auth__Issuer', value: authIssuer }
+    { name: 'Auth__Audience', value: authAudience }
+    { name: 'Auth__BootstrapCurators__0', value: bootstrapCurator }
     // Slot swap gate: Azure pings this path on the *source* slot and refuses to swap unless it
     // answers with one of these statuses. /health/ready does a real database round-trip.
     { name: 'WEBSITE_SWAP_WARMUP_PING_PATH', value: '/health/ready' }

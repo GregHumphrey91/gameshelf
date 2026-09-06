@@ -73,6 +73,8 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__GameShelf: "Server=sqlserver,1433;Database=gameshelf_e2e;User Id=sa;Password=${MSSQL_TEST_SA_PASSWORD:-GameShelf_Test_Pa55word!};TrustServerCertificate=True;Encrypt=False"
       Database__MigrateOnStartup: "true"
+      # E2E runs in local mode: no identity provider, every caller is a local Curator.
+      Auth__Enabled: "false"
       # The browser runs inside the e2e container and loads the SPA from http://web.
       Cors__AllowedOrigins__0: http://web
     depends_on:

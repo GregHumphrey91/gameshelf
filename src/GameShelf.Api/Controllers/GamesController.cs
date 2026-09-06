@@ -1,11 +1,15 @@
+using GameShelf.Api.Auth;
 using GameShelf.Api.Data;
 using GameShelf.Api.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GameShelf.Api.Controllers;
 
+/// <summary>Readers may view the collection; only Curators may change it.</summary>
 [ApiController]
 [Route("api/games")]
+[Authorize(Policy = AuthPolicies.Reader)]
 public class GamesController(IGameRepository games, TimeProvider clock) : ControllerBase
 {
     [HttpGet]
@@ -26,6 +30,7 @@ public class GamesController(IGameRepository games, TimeProvider clock) : Contro
     }
 
     [HttpPost]
+    [Authorize(Policy = AuthPolicies.Curator)]
     [ProducesResponseType(typeof(GameDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<GameDto>> Create([FromBody] GameWriteRequest request, CancellationToken ct)
@@ -45,6 +50,7 @@ public class GamesController(IGameRepository games, TimeProvider clock) : Contro
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Policy = AuthPolicies.Curator)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -64,6 +70,7 @@ public class GamesController(IGameRepository games, TimeProvider clock) : Contro
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = AuthPolicies.Curator)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)

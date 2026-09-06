@@ -35,6 +35,12 @@ services:
       Database__MigrateOnStartup: "true"
       Cors__AllowedOrigins__0: http://localhost:5173
       Cors__AllowedOrigins__1: http://localhost:3000
+      # Sign-in is off by default (local mode). Set AUTH_ENABLED=true plus the OKTA_* values in .env
+      # to exercise the real identity provider — see README "Signing in with a real identity provider".
+      Auth__Enabled: ${AUTH_ENABLED:-false}
+      Auth__Issuer: ${OKTA_ISSUER:-}
+      Auth__Audience: ${OKTA_AUDIENCE:-api://default}
+      Auth__BootstrapCurators__0: ${BOOTSTRAP_CURATOR:-}
     ports:
       - "8080:8080"
     depends_on:
@@ -48,6 +54,9 @@ services:
     environment:
       # Browser-side URL of the API (the SPA runs in your browser, not in this container).
       API_BASE_URL: http://localhost:8080
+      # Both empty = local mode (no sign-in). Public identifiers, not secrets.
+      OKTA_ISSUER: ${OKTA_ISSUER:-}
+      OKTA_CLIENT_ID: ${OKTA_CLIENT_ID:-}
     ports:
       - "3000:80"
     depends_on:

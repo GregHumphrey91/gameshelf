@@ -25,6 +25,9 @@ public class IntegrationApiFactory : WebApplicationFactory<Program>, IAsyncLifet
         builder.UseEnvironment("Testing");
         builder.UseSetting("ConnectionStrings:GameShelf", ConnectionString);
         builder.UseSetting("Database:MigrateOnStartup", "false");
+        // No identity provider here: HTTP tests run as the local Curator. Role resolution against the
+        // real Users table is exercised directly in RoleResolutionTests.
+        builder.UseSetting("Auth:Enabled", "false");
     }
 
     public async Task InitializeAsync()
@@ -41,6 +44,7 @@ public class IntegrationApiFactory : WebApplicationFactory<Program>, IAsyncLifet
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<GameShelfDbContext>();
         await db.Games.ExecuteDeleteAsync();
+        await db.Users.ExecuteDeleteAsync();
     }
 
     Task IAsyncLifetime.DisposeAsync() => Task.CompletedTask;

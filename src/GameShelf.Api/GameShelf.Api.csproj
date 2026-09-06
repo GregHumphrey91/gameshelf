@@ -5,9 +5,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Do not enable InvariantGlobalization: Microsoft.Data.SqlClient requires culture data at connect time. -->
+    <!-- Local, gitignored overrides for Development: `dotnet user-secrets set Auth:Enabled true` etc. (see README). -->
+    <UserSecretsId>gameshelf-api</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.30" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.30">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

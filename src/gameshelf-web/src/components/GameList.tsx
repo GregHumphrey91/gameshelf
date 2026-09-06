@@ -2,6 +2,8 @@ import type { Game } from '@/types/game';
 
 interface GameListProps {
   games: Game[];
+  /** False for Readers: the table is shown without the edit/delete column. */
+  canEdit?: boolean;
   onEdit: (game: Game) => void;
   onDelete: (game: Game) => void;
 }
@@ -13,11 +15,11 @@ export function formatAddedDate(iso: string): string {
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('en-US', { timeZone: 'UTC' });
 }
 
-export function GameList({ games, onEdit, onDelete }: GameListProps) {
+export function GameList({ games, canEdit = true, onEdit, onDelete }: GameListProps) {
   if (games.length === 0) {
     return (
       <p className="empty" data-testid="empty-state">
-        No games yet. Add your first one above.
+        {canEdit ? 'No games yet. Add your first one above.' : 'No games in the collection yet.'}
       </p>
     );
   }
@@ -31,7 +33,7 @@ export function GameList({ games, onEdit, onDelete }: GameListProps) {
           <th>Condition</th>
           <th>Est. value</th>
           <th>Added</th>
-          <th aria-label="Actions" />
+          {canEdit && <th aria-label="Actions" />}
         </tr>
       </thead>
       <tbody>
@@ -44,14 +46,16 @@ export function GameList({ games, onEdit, onDelete }: GameListProps) {
             </td>
             <td>{currency.format(game.estimatedValue)}</td>
             <td>{formatAddedDate(game.addedDate)}</td>
-            <td className="game-table__actions">
-              <button type="button" onClick={() => onEdit(game)} data-testid="edit-game">
-                Edit
-              </button>
-              <button type="button" onClick={() => onDelete(game)} data-testid="delete-game">
-                Delete
-              </button>
-            </td>
+            {canEdit && (
+              <td className="game-table__actions">
+                <button type="button" onClick={() => onEdit(game)} data-testid="edit-game">
+                  Edit
+                </button>
+                <button type="button" onClick={() => onDelete(game)} data-testid="delete-game">
+                  Delete
+                </button>
+              </td>
+            )}
           </tr>
         ))}
       </tbody>

@@ -1,10 +1,13 @@
 using GameShelf.Api.Health;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GameShelf.Api.Controllers;
 
+/// <summary>Probed by the platform and by deployment-slot warmup, which carry no credentials.</summary>
 [ApiController]
 [Route("health")]
+[AllowAnonymous]
 public class HealthController(IReadinessProbe readinessProbe) : ControllerBase
 {
     [HttpGet("live")]

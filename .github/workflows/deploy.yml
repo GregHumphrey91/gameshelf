@@ -3,7 +3,9 @@
 # STATUS: scaffolding. This workflow will fail until:
 #   Phase 3  infra/scripts/bootstrap.ps1 has created the resource group, identities and roles
 #   Phase 4  the federated credential exists (deploy with githubRepository=<owner>/gameshelf) and the
-#            GitHub Environment "dev" defines the variables listed under `env:` below
+#            GitHub Environment "dev" defines these variables (all public identifiers, none secret):
+#              AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_RESOURCE_GROUP, ACR_NAME
+#              OKTA_ISSUER, OKTA_CLIENT_ID, BOOTSTRAP_CURATOR (email that becomes the first Curator)
 #
 # There are NO secrets in this workflow. Authentication is OIDC federation: GitHub mints a short-lived
 # token whose subject is "repo:<owner>/<repo>:environment:dev", Azure exchanges it for the deploy
@@ -93,6 +95,9 @@ jobs:
               webImage="${LOGIN_SERVER}/gameshelf-web:${IMAGE_TAG}" \
               githubRepository="${{ github.repository }}" \
               enableStagingSlot=${{ inputs.use_staging_slot }} \
+              oktaIssuer="${{ vars.OKTA_ISSUER }}" \
+              oktaClientId="${{ vars.OKTA_CLIENT_ID }}" \
+              bootstrapCurator="${{ vars.BOOTSTRAP_CURATOR }}" \
             --query properties.outputs --output json > outputs.json
 
           jq -r 'to_entries[] | "\(.key)=\(.value.value)"' outputs.json >> "$GITHUB_OUTPUT"

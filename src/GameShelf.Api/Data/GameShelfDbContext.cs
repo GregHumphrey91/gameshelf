@@ -6,9 +6,24 @@ namespace GameShelf.Api.Data;
 public class GameShelfDbContext(DbContextOptions<GameShelfDbContext> options) : DbContext(options)
 {
     public DbSet<Game> Games => Set<Game>();
+    public DbSet<User> Users => Set<User>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.ToTable("Users");
+            entity.HasKey(u => u.Id);
+            entity.Property(u => u.OktaSubject).IsRequired().HasMaxLength(256);
+            entity.Property(u => u.Email).IsRequired().HasMaxLength(320);
+            entity.Property(u => u.Role).HasConversion<string>().HasMaxLength(20);
+            entity.Property(u => u.CreatedAt)
+                .IsRequired()
+                .HasConversion(v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+            // One row per identity-provider subject; the resolver relies on this to serialise first-login races.
+            entity.HasIndex(u => u.OktaSubject).IsUnique();
+        });
+
         modelBuilder.Entity<Game>(entity =>
         {
             entity.ToTable("Games");

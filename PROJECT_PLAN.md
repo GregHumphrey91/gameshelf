@@ -164,13 +164,14 @@ gameshelf/
 
 ### Phase 2 — Okta OIDC + PKCE (≈1 session)
 
-- [ ] SPA: `@okta/okta-react` + `@okta/okta-auth-js`, Authorization Code + PKCE, `/login/callback` route, access token attached as `Authorization: Bearer` by the API client (keep the token accessor outside React so `api/games.ts` stays framework-free)
-- [ ] Keep an auth-disabled mode (`VITE_AUTH_DISABLED`, `Auth:Enabled=false`) so unit, contract and E2E tests run without a real identity provider
-- [ ] API: JWT bearer validation — issuer and audience from configuration, signing keys from Okta's JWKS
-- [ ] `Users` table (`OktaSubject`, `Email`, `Role`) + migration. Resolve the caller by `sub` and read the role **from this table**, never from token claims. Unknown subject → 403
-- [ ] Policies: `Reader` may list/get; `Curator` may create/update/delete
-- [ ] Register `http://localhost:5173/login/callback` in Okta now; you will add the deployed URL in Phase 3 when you hit `redirect_uri mismatch`
-- [ ] Tests: unit tests for role resolution; contract tests for 401/403; E2E can run with auth disabled
+- [x] SPA: `@okta/okta-auth-js` only (no router, no React binding), Authorization Code + PKCE, `/login/callback` handled at boot, access token attached as `Authorization: Bearer` by the API client (token accessor lives outside React in `src/api/token.ts`, so `src/api/` stays framework-free)
+- [x] Auth-disabled "local mode" (`Auth:Enabled=false`; SPA has no issuer/client id) so unit, contract, integration and E2E tests run without a real identity provider. Refused in Production.
+- [x] API: JWT bearer validation — issuer and audience from configuration, signing keys from the issuer's JWKS
+- [x] `Users` table (`OktaSubject`, `Email`, `Role`) + migration. Resolve the caller by `sub` and read the role **from this table**, never from token claims. Unknown subject → 403. `Auth:BootstrapCurators` creates the first Curator on first sign-in.
+- [x] Policies: `Reader` may list/get; `Curator` may create/update/delete; `GET /api/me` for any signed-in caller
+- [x] Register `http://localhost:5173/login/callback` in Okta (add the deployed URL in Phase 3 when you hit `redirect_uri mismatch`)
+- [x] Tests: unit tests for role resolution and claims transformation; contract tests for 401/403/`/api/me`; integration tests for the `Users` repository and bootstrap; SPA tests for signed-out / no-access / Reader / Curator; E2E runs with auth disabled
+- [ ] Hand check: sign in locally with the real org (README → "Signing in with a real identity provider")
 
 **Acceptance:** log in locally via Okta; unauthenticated API calls get 401; a user in the `Users` table gets the role that table says; a valid token for an unknown user gets 403.
 

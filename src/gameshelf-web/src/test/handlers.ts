@@ -1,11 +1,27 @@
 import { http, HttpResponse } from 'msw';
 import { TEST_API_BASE } from '@/test/api';
 import type { Game, GameInput } from '@/types/game';
+import type { CurrentUser } from '@/types/user';
 
 const GAMES_URL = `${TEST_API_BASE}/api/games`;
+const ME_URL = `${TEST_API_BASE}/api/me`;
 
 let games: Game[] = [];
 let nextId = 1;
+
+/** Mirrors what the API reports in local mode (Auth:Enabled=false). */
+export const LOCAL_USER: CurrentUser = { subject: 'local-dev', email: 'local-dev@gameshelf.local', role: 'Curator' };
+
+let currentUser: CurrentUser = LOCAL_USER;
+
+/** Decide who GET /api/me says the caller is. Reset after each test. */
+export function setCurrentUser(user: Partial<CurrentUser>) {
+  currentUser = { ...LOCAL_USER, ...user };
+}
+
+export function resetCurrentUser() {
+  currentUser = LOCAL_USER;
+}
 
 /** Replace the in-memory store. Call from a test to seed data; the store is cleared after each test. */
 export function seedGames(seed: Omit<Game, 'id' | 'addedDate'>[] | Game[]) {
@@ -41,6 +57,8 @@ function validate(input: GameInput) {
 }
 
 export const handlers = [
+  http.get(ME_URL, () => HttpResponse.json(currentUser)),
+
   http.get(GAMES_URL, () =>
     HttpResponse.json([...games].sort((a, b) => b.addedDate.localeCompare(a.addedDate) || b.id - a.id)),
   ),

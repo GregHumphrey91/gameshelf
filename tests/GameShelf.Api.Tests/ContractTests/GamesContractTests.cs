@@ -11,7 +11,8 @@ public class GamesContractTests(ContractApiFactory factory) : IClassFixture<Cont
     private static readonly string[] ExpectedGameProperties =
         ["id", "title", "platform", "condition", "estimatedValue", "addedDate"];
 
-    private readonly HttpClient _client = factory.CreateClient();
+    // Shape tests run as a Curator so authorization never gets in the way; AuthContractTests covers the 401/403 rules.
+    private readonly HttpClient _client = factory.CreateClientAs(TestUsers.Curator);
 
     private static Game SampleGame(int id = 1) => new()
     {

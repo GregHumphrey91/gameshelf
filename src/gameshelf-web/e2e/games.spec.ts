@@ -20,6 +20,11 @@ test.describe('GameShelf collection', () => {
     await expect(page.getByRole('heading', { name: 'GameShelf' })).toBeVisible();
     await expect(page.getByTestId('loading')).toBeHidden();
     await expect(page.getByTestId('empty-state').or(page.getByTestId('game-table'))).toBeVisible();
+
+    // The test stacks run without an identity provider: the API reports a local Curator.
+    await expect(page.getByTestId('auth-disabled')).toHaveText('Local mode');
+    await expect(page.getByTestId('role-badge')).toHaveText('Curator');
+    await expect(page.getByTestId('sign-in')).toHaveCount(0);
   });
 
   test('adds, edits, and deletes a game', async ({ page }) => {

@@ -16,9 +16,10 @@ function describe(err: unknown): string {
   return err instanceof Error ? err.message : 'Something went wrong';
 }
 
-export function useGames(): UseGamesResult {
+/** Loads the collection once `enabled` is true (i.e. the caller is allowed to read it). */
+export function useGames(enabled = true): UseGamesResult {
   const [games, setGames] = useState<Game[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -34,8 +35,13 @@ export function useGames(): UseGamesResult {
   }, []);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    if (enabled) {
+      void refresh();
+    } else {
+      setGames([]);
+      setLoading(false);
+    }
+  }, [enabled, refresh]);
 
   const run = useCallback(
     async (action: () => Promise<unknown>) => {

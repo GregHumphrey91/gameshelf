@@ -38,6 +38,20 @@ describe('GameList', () => {
     expect(onEdit).toHaveBeenCalledWith(games[0]);
     expect(onDelete).toHaveBeenCalledWith(games[1]);
   });
+
+  it('hides the action buttons when editing is not allowed', () => {
+    render(<GameList games={games} canEdit={false} onEdit={vi.fn()} onDelete={vi.fn()} />);
+
+    expect(screen.queryByTestId('edit-game')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('delete-game')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Actions')).not.toBeInTheDocument();
+  });
+
+  it('words the empty state for read-only viewers', () => {
+    render(<GameList games={[]} canEdit={false} onEdit={vi.fn()} onDelete={vi.fn()} />);
+
+    expect(screen.getByTestId('empty-state')).toHaveTextContent('No games in the collection yet.');
+  });
 });
 
 describe('formatAddedDate', () => {
