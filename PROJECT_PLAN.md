@@ -146,7 +146,7 @@ gameshelf/
 - [x] `gh` CLI working
 - [x] `az` CLI on PATH in your shell (`az account show` returns your subscription)
 - [x] Okta Integrator Free Plan org; one OIDC application (type: Single-Page App, PKCE); note the issuer URL and client id
-- [ ] GitHub repository created and this repo pushed
+- [x] GitHub repository created and this repo pushed
 - [ ] **Budget alert before creating any Azure resource** (command in `infra/README.md`)
 
 **Acceptance:** `az account show` works; you have an Okta org and app; the budget alert exists.
@@ -160,7 +160,7 @@ gameshelf/
 - [x] All five test suites, wired into `ci.yml`
 - [x] Dockerfiles for both apps; Bicep and deploy workflow scaffolded (inert until Phase 3/4)
 
-**Acceptance:** `docker compose up --build` → full CRUD works in the browser at http://localhost:3000; `dotnet test` and `npm test` / `npm run test:e2e` are green.
+**Acceptance:** `docker compose up --build` → full CRUD works in the browser at http://localhost:3000; `npm test` (every suite, in containers) is green.
 
 ### Phase 2 — Okta OIDC + PKCE (≈1 session)
 
@@ -230,7 +230,7 @@ Start only when Phases 1-5 are reliable.
 ## 5. Definition of done, per phase
 
 Paste the phase's **Acceptance** line into the session as the goal. A phase is done when that line is
-true *and* `ci.yml` is green.
+true *and* `ci.yml` is green (`npm run ci:local` runs the same checks).
 
 ## 6. Cost management
 

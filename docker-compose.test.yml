@@ -1,9 +1,9 @@
-# Test stack — every suite runs inside a container, so the only host prerequisite is Docker.
+# Test stack — the only way tests run, locally and in CI. The only host prerequisite is Docker.
 #
-#   npm run test:docker             all three suites, one after another
-#   npm run test:docker:backend     unit + contract + integration   sqlserver → backend-tests
-#   npm run test:docker:frontend    Vitest                           frontend-tests
-#   npm run test:docker:e2e         Playwright                       sqlserver → api → web → e2e
+#   npm test                 all three suites, one after another
+#   npm run test:backend     unit + contract + integration     sqlserver → backend-tests
+#   npm run test:frontend    lint + typecheck + Vitest          frontend-tests
+#   npm run test:e2e         Playwright                         sqlserver → api → web → e2e
 #
 # Those scripts call scripts/docker-test.mjs, which runs
 #   docker compose -f docker-compose.test.yml --profile <suite> up --build --abort-on-container-exit --exit-code-from <runner>
@@ -54,7 +54,7 @@ services:
       sqlserver:
         condition: service_healthy
 
-  # ---- frontend: Vitest ---------------------------------------------------
+  # ---- frontend: lint + typecheck + Vitest ---------------------------------
   frontend-tests:
     build:
       context: src/gameshelf-web
@@ -97,7 +97,7 @@ services:
       dockerfile: Dockerfile.e2e
     profiles: [e2e]
     environment:
-      # Setting E2E_BASE_URL tells playwright.config.ts not to start servers of its own.
+      # playwright.config.ts requires E2E_BASE_URL; the entrypoint waits for both URLs before running.
       E2E_BASE_URL: http://web
       API_READY_URL: http://api:8080/health/ready
     volumes:

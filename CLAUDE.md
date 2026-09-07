@@ -13,28 +13,27 @@ describe it on its own terms; do not compare it to or reference other projects i
 The root `package.json` is the task runner — prefer its scripts over raw commands so behaviour matches the README and CI:
 
 ```powershell
-npm run setup                    # once
+npm run setup                    # once (dotnet tools + restore, npm ci) — only for the inner loop
 npm run db:up                    # SQL Server container (waits for healthy)
 npm run dev:api / npm run dev:web
-npm run test:backend:unit        # no DB
-npm run test:backend:integration # starts the DB
-npm run test:frontend
-npm run test:e2e                 # Playwright starts the API and Vite itself
-npm test / npm run test:all
-npm run test:docker[:backend|:frontend|:e2e]   # same suites inside containers (docker-compose.test.yml)
+npm test                         # every suite, in containers (docker-compose.test.yml)
+npm run test:backend / test:frontend / test:e2e
 npm run lint / npm run build / npm run bicep:build
+npm run ci:local                 # lint + npm test + bicep:build — what CI runs
 ```
 
-`dotnet run --project src/GameShelf.Api` uses the `http` launch profile (port 8080, Development). Playwright's `webServer` starts the API with `--no-launch-profile` and explicit env so it behaves the same in CI.
+`dotnet run --project src/GameShelf.Api` uses the `http` launch profile (port 8080, Development).
 
-## Containerised test stack (`docker-compose.test.yml`)
+## Tests run in containers only (`docker-compose.test.yml`)
 
+- **There is one way to run tests**: the container stack, locally and in CI. Do not add host-side `dotnet test` / `vitest` / `playwright` scripts to the root `package.json` or host-toolchain jobs to `ci.yml`. (Running `dotnet test` or `npx vitest` by hand while iterating is fine; it just is not a supported path.)
 - Driven only through `scripts/docker-test.mjs` (`up --build --abort-on-container-exit --exit-code-from <runner>`, then `down --volumes`). Keep that script shell-agnostic — no `&&`-chains or env prefixes in root `package.json`.
+- `frontend-tests` runs `npm run check` (lint + typecheck + Vitest); `playwright.config.ts` starts no servers and requires `E2E_BASE_URL`.
 - Every service in a profile is long-running or is the runner. Never add a one-shot helper (seed, init) as a separate service: it exits 0 and aborts the stack. Fold such work into the runner's entrypoint.
 - The `sqlserver` healthcheck runs `CREATE DATABASE` (via a marker DB), not `SELECT 1`, because DDL fails for a while after `SELECT 1` starts succeeding on SQL Server 2022. Keep it that way.
 - Runner images COPY sources from the repo-root context (`tests/Dockerfile`) — never bind-mount `src/` or `tests/` into them, host `bin/obj` would break the build.
 - `Dockerfile.e2e`'s base image tag must equal the exact `@playwright/test` version in `src/gameshelf-web/package.json` (pinned, no caret). Bump both together.
-- Setting `E2E_BASE_URL` makes `playwright.config.ts` skip its `webServer` entries; the e2e container relies on this.
+- The e2e container's entrypoint waits for `API_READY_URL` and `E2E_BASE_URL` before running Playwright.
 
 ## Backend conventions
 

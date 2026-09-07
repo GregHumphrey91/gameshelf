@@ -1,9 +1,9 @@
 {
   "name": "gameshelf",
   "private": true,
-  "description": "Root task runner. Every script works from any shell (cmd, PowerShell, Git Bash, CI).",
+  "description": "Root task runner. Every script works from any shell (cmd, PowerShell, Git Bash, CI). Tests run in containers only.",
   "scripts": {
-    "setup": "dotnet tool restore && dotnet restore GameShelf.sln && npm --prefix src/gameshelf-web ci --no-audit --no-fund && npm --prefix src/gameshelf-web run playwright:install",
+    "setup": "dotnet tool restore && dotnet restore GameShelf.sln && npm --prefix src/gameshelf-web ci --no-audit --no-fund",
 
     "db:up": "docker compose up -d --wait sqlserver",
     "db:down": "docker compose stop sqlserver",
@@ -17,20 +17,13 @@
     "build": "dotnet build GameShelf.sln && npm --prefix src/gameshelf-web run build",
     "lint": "npm --prefix src/gameshelf-web run lint && npm --prefix src/gameshelf-web run typecheck",
 
-    "test": "npm run test:backend && npm run test:frontend",
-    "test:backend": "npm run test:backend:unit && npm run test:backend:integration",
-    "test:backend:unit": "dotnet test tests/GameShelf.Api.Tests",
-    "test:backend:integration": "npm run db:up && dotnet test tests/GameShelf.Api.IntegrationTests",
-    "test:frontend": "npm --prefix src/gameshelf-web test",
-    "test:e2e": "npm run db:up && npm --prefix src/gameshelf-web run test:e2e",
-    "test:all": "npm test && npm run test:e2e",
+    "test": "node scripts/docker-test.mjs all",
+    "test:backend": "node scripts/docker-test.mjs backend",
+    "test:frontend": "node scripts/docker-test.mjs frontend",
+    "test:e2e": "node scripts/docker-test.mjs e2e",
+    "test:down": "docker compose -f docker-compose.test.yml --profile backend --profile frontend --profile e2e down --volumes --remove-orphans",
 
-    "test:docker": "node scripts/docker-test.mjs all",
-    "test:docker:backend": "node scripts/docker-test.mjs backend",
-    "test:docker:frontend": "node scripts/docker-test.mjs frontend",
-    "test:docker:e2e": "node scripts/docker-test.mjs e2e",
-    "test:docker:down": "docker compose -f docker-compose.test.yml --profile backend --profile frontend --profile e2e down --volumes --remove-orphans",
-
-    "bicep:build": "az bicep build --file infra/bicep/main.bicep && az bicep build-params --file infra/bicep/env/dev.bicepparam"
+    "bicep:build": "az bicep build --file infra/bicep/main.bicep && az bicep build-params --file infra/bicep/env/dev.bicepparam",
+    "ci:local": "npm run lint && npm test && npm run bicep:build"
   }
 }

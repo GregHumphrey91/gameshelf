@@ -42,13 +42,28 @@ Budget guardrail first — the free credit has a hard expiry. Create it in the p
 2. Scope: the subscription. Name `gameshelf-guardrail`, reset period Monthly, amount ~50 USD, expiry 2026-12-31
 3. Alert conditions: actual cost at 50 %, 80 % and 100 %, with your email as the recipient
 
+Resource providers are registered per subscription and a fresh subscription has none of them. Once, before the first deploy:
+
+```powershell
+foreach ($ns in 'Microsoft.ManagedIdentity','Microsoft.OperationalInsights','Microsoft.Insights','Microsoft.ContainerRegistry','Microsoft.Sql','Microsoft.Web') {
+  az provider register --namespace $ns --wait
+}
+```
+
+Then:
+
 ```powershell
 az login
 az account set --subscription <id>
 
-./infra/scripts/bootstrap.ps1                       # RG + Bicep + role assignments
-./infra/scripts/bootstrap.ps1 -GithubRepository "<owner>/gameshelf"   # Phase 4: adds the federated credential
+# The sign-in settings are required (the API refuses to start without an issuer). Public identifiers, not secrets.
+./infra/scripts/bootstrap.ps1 -OktaIssuer https://<org>.okta.com/oauth2/default -OktaClientId <id> -BootstrapCurator <your email>
+
+# Phase 4: same, plus the federated credential
+./infra/scripts/bootstrap.ps1 ... -GithubRepository "<owner>/gameshelf"
 ```
+
+The script ends by printing the deployed web URL: add `<web url>/login/callback` as a sign-in redirect URI and `<web url>` as a sign-out redirect URI on the identity provider's SPA app, or sign-in fails with `redirect_uri mismatch`.
 
 Preview any later change before applying it:
 

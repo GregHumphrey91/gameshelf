@@ -9,16 +9,15 @@ swaps, private networking). See [PROJECT_PLAN.md](PROJECT_PLAN.md) for the phase
 
 ## Prerequisites
 
-- .NET 8 SDK
-- Node.js 20+ (22 recommended)
-- Docker Desktop
+- Docker Desktop — the only requirement for running the app and every test suite
+- .NET 8 SDK and Node.js 22 — only for the hot-reload inner loop and migrations
 
 ## Run it locally
 
 ### Inner loop (hot reload)
 
 ```powershell
-npm run setup        # once: dotnet tools + restore, npm ci, Playwright browser
+npm run setup        # once: dotnet tools + restore, npm ci
 
 npm run dev:api      # terminal 1 — starts SQL Server if needed, API on http://localhost:8080 (Swagger at /swagger)
 npm run dev:web      # terminal 2 — SPA on http://localhost:5173
@@ -89,36 +88,24 @@ like `API_BASE_URL`, so the same image serves every environment.
 
 ## Tests
 
-All commands run from the repository root (`package.json` is the task runner) and start the SQL
-container for you when they need it. First time only: `npm run setup`.
-
-| Command | Suite | Needs |
-|---|---|---|
-| `npm run test:backend:unit` | unit + contract (`tests/GameShelf.Api.Tests`) | nothing |
-| `npm run test:backend:integration` | database-backed (`tests/GameShelf.Api.IntegrationTests`) | Docker |
-| `npm run test:frontend` | Vitest + Testing Library, API mocked with MSW | nothing |
-| `npm run test:e2e` | Playwright — starts the API and Vite itself, then drives the browser | Docker |
-| `npm test` | everything except E2E | Docker |
-| `npm run test:all` | everything | Docker |
-
-### Inside containers
-
-The same suites can run entirely inside Docker — no .NET SDK, Node, or browsers needed on the host,
-and exactly what CI's `containers` job runs. `docker-compose.test.yml` is a separate stack (own project
+Every suite runs inside Docker, and only there. There is no .NET SDK, Node, or browser requirement on
+the host, and CI runs the exact same command. `docker-compose.test.yml` is a separate stack (own project
 name, no published ports, throwaway SQL Server) so it never interferes with the dev stack.
 
 | Command | What starts | Results |
 |---|---|---|
-| `npm run test:docker:backend` | `sqlserver` → `backend-tests` (unit + contract + integration) | `test-results/backend/*.trx` |
-| `npm run test:docker:frontend` | `frontend-tests` (Vitest) | console |
-| `npm run test:docker:e2e` | `sqlserver` → `api` → `web` → `e2e` (Playwright against the real images) | `src/gameshelf-web/playwright-report/` |
-| `npm run test:docker` | all three, one after another, with a pass/fail summary | both |
+| `npm run test:backend` | `sqlserver` → `backend-tests` (unit + contract + integration) | `test-results/backend/*.trx` |
+| `npm run test:frontend` | `frontend-tests` (lint + typecheck + Vitest, API mocked with MSW) | console |
+| `npm run test:e2e` | `sqlserver` → `api` → `web` → `e2e` (Playwright against the real images) | `src/gameshelf-web/playwright-report/` |
+| `npm test` | all three, one after another, with a pass/fail summary | both |
 
 Each command is `docker compose -f docker-compose.test.yml --profile <suite> up --build
 --abort-on-container-exit --exit-code-from <runner>` followed by `down --volumes`, driven by
 `scripts/docker-test.mjs` so it behaves the same from PowerShell, cmd, bash and CI. The runner
-container's exit code is the command's exit code. If a run is interrupted, `npm run test:docker:down`
+container's exit code is the command's exit code. If a run is interrupted, `npm run test:down`
 removes whatever is left.
+
+`npm run ci:local` runs what CI runs: lint, every suite, and the Bicep build.
 
 Other root scripts: `npm run lint` (ESLint + `tsc`), `npm run build`, `npm run bicep:build`,
 `npm run db:up` / `db:down` / `db:reset` (wipes the local database), `npm run dev` (whole stack in
