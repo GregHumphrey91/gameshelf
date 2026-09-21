@@ -5,7 +5,14 @@ import { formatAddedDate, GameList } from '@/components/GameList';
 import type { Game } from '@/types/game';
 
 const games: Game[] = [
-  { id: 1, title: 'Chrono Trigger', platform: 'SNES', condition: 'Good', estimatedValue: 120, addedDate: '2026-09-01T00:00:00Z' },
+  {
+    id: 1,
+    title: 'Chrono Trigger',
+    platform: 'SNES',
+    condition: 'Good',
+    estimatedValue: 120,
+    addedDate: '2026-09-01T00:00:00Z',
+  },
   { id: 2, title: 'Ico', platform: 'PS2', condition: 'Mint', estimatedValue: 45.5, addedDate: '2026-09-02T00:00:00Z' },
 ];
 

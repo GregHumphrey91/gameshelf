@@ -1,0 +1,18 @@
+# syntax=docker/dockerfile:1
+#
+# Frontend test runner for docker-compose.test.yml: lint, typecheck, generated-types check, Vitest.
+# Build context is the REPOSITORY ROOT, not this directory: the suite reads the committed API contract
+# (infra/openapi.json) to check the generated types and the mock handlers against it. The paths below
+# keep the repository layout so `../../infra/openapi.json` resolves exactly as it does on a host.
+
+FROM node:22-alpine
+WORKDIR /repo/src/gameshelf-web
+ENV CI=true
+
+COPY src/gameshelf-web/package.json src/gameshelf-web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY infra/openapi.json /repo/infra/openapi.json
+COPY src/gameshelf-web/ ./
+
+CMD ["npm", "run", "check"]

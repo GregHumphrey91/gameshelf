@@ -1,0 +1,10 @@
+{
+  // What the production image compiles: the app without its tests. The tests import
+  // infra/openapi.json, which lives outside the image's build context; `npm run typecheck`
+  // (tsc -b) still covers everything.
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.build.tsbuildinfo"
+  },
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test"]
+}

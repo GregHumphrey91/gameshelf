@@ -1,53 +1,80 @@
+import { useSyncExternalStore, type ReactNode } from 'react';
 import { render } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
 import App from '@/App';
-import { AuthProvider } from '@/auth/AuthContext';
-import { createDisabledAuthClient, type AuthClient, type AuthSession } from '@/auth/authClient';
+import { AuthSessionContext, LOCAL_SESSION, type AuthSession, type AuthStatus } from '@/auth/session';
 
-export const SIGNED_OUT: AuthSession = { status: 'signed-out', email: null, name: null };
-export const SIGNED_IN: AuthSession = { status: 'signed-in', email: 'player@example.com', name: 'Player One' };
+export interface SessionState {
+  status: AuthStatus;
+  email: string | null;
+  name: string | null;
+}
 
-/** A controllable identity-provider stand-in for component tests. */
-export class FakeAuthClient implements AuthClient {
-  readonly enabled = true;
-  started = false;
-  token: string | null = 'fake-access-token';
+export const SIGNED_OUT: SessionState = { status: 'signed-out', email: null, name: null };
+export const SIGNED_IN: SessionState = { status: 'signed-in', email: 'player@example.com', name: 'Player One' };
+
+/**
+ * A controllable identity-provider stand-in for component tests. It feeds AuthSessionContext — the
+ * seam the app itself owns — so no test depends on how the provider SDK stores its state.
+ */
+export class FakeAuthClient {
   readonly signIn = vi.fn(async () => {});
   readonly signOut = vi.fn(async () => {});
 
   private session: AuthSession;
-  private readonly listeners = new Set<(session: AuthSession) => void>();
+  private readonly listeners = new Set<() => void>();
 
-  constructor(session: AuthSession = SIGNED_IN) {
-    this.session = session;
+  constructor(state: SessionState = SIGNED_IN) {
+    this.session = this.toSession(state);
   }
 
-  setSession(session: AuthSession) {
-    this.session = session;
-    this.listeners.forEach((listener) => listener(session));
+  setSession(state: SessionState) {
+    this.session = this.toSession(state);
+    this.listeners.forEach((listener) => listener());
   }
-
-  start = async () => {
-    this.started = true;
-  };
 
   getSession = () => this.session;
 
-  subscribe = (listener: (session: AuthSession) => void) => {
+  subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
     };
   };
 
-  getAccessToken = async () => this.token;
+  private toSession(state: SessionState): AuthSession {
+    return { enabled: true, ...state, signIn: this.signIn, signOut: this.signOut };
+  }
 }
 
-/** Renders the app inside an AuthProvider. Defaults to local mode (no identity provider). */
-export function renderApp(client: AuthClient = createDisabledAuthClient()) {
+function FakeAuthProvider({ client, children }: { client: FakeAuthClient | null; children: ReactNode }) {
+  const session = useSyncExternalStore(
+    client?.subscribe ?? noSubscription,
+    client?.getSession ?? getLocalSession,
+    client?.getSession ?? getLocalSession,
+  );
+  return <AuthSessionContext.Provider value={session}>{children}</AuthSessionContext.Provider>;
+}
+
+const noSubscription = () => () => {};
+const getLocalSession = () => LOCAL_SESSION;
+
+/** A fresh cache per render, and no retries: a test that expects an error should see it immediately. */
+export function createTestQueryClient(): QueryClient {
+  return new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+}
+
+/** Renders the whole app. Defaults to local mode (no identity provider). */
+export function renderApp(client: FakeAuthClient | null = null, { route = '/' }: { route?: string } = {}) {
   return render(
-    <AuthProvider client={client}>
-      <App />
-    </AuthProvider>,
+    <QueryClientProvider client={createTestQueryClient()}>
+      <MemoryRouter initialEntries={[route]}>
+        <FakeAuthProvider client={client}>
+          <App />
+        </FakeAuthProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }

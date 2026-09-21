@@ -6,13 +6,6 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-# ---- test (docker-compose.test.yml → frontend-tests) ----------------------
-# Lint, typecheck and unit tests. Not part of the default build: the runtime stage never references it.
-FROM deps AS test
-ENV CI=true
-COPY . .
-CMD ["npm", "run", "check"]
-
 # ---- build ----------------------------------------------------------------
 FROM deps AS build
 COPY . .

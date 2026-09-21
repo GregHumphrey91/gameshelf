@@ -41,13 +41,23 @@ describe('request', () => {
       http.get(`${TEST_API_BASE}/api/anonymous`, () => new HttpResponse(null, { status: 401 })),
     );
 
-    await expect(request('/api/denied')).rejects.toMatchObject({ status: 403, message: 'Your account is not allowed to do that.' });
-    await expect(request('/api/anonymous')).rejects.toMatchObject({ status: 401, message: 'You need to sign in to do that.' });
+    await expect(request('/api/denied')).rejects.toMatchObject({
+      status: 403,
+      message: 'Your account is not allowed to do that.',
+    });
+    await expect(request('/api/anonymous')).rejects.toMatchObject({
+      status: 401,
+      message: 'You need to sign in to do that.',
+    });
   });
 });
 
 describe('meApi', () => {
   it('returns the current user', async () => {
-    await expect(meApi.get()).resolves.toEqual({ subject: 'local-dev', email: 'local-dev@gameshelf.local', role: 'Curator' });
+    await expect(meApi.get()).resolves.toEqual({
+      subject: 'local-dev',
+      email: 'local-dev@gameshelf.local',
+      role: 'Curator',
+    });
   });
 });

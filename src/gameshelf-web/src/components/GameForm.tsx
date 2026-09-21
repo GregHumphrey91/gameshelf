@@ -14,8 +14,7 @@ export function GameForm({ initial, submitLabel, onSubmit, onCancel }: GameFormP
   const [values, setValues] = useState<GameInput>(initial ?? EMPTY);
   const [submitting, setSubmitting] = useState(false);
 
-  const set = <K extends keyof GameInput>(key: K, value: GameInput[K]) =>
-    setValues((v) => ({ ...v, [key]: value }));
+  const set = <K extends keyof GameInput>(key: K, value: GameInput[K]) => setValues((v) => ({ ...v, [key]: value }));
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
