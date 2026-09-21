@@ -17,6 +17,8 @@ RUN dotnet restore tests/GameShelf.Api.Tests/GameShelf.Api.Tests.csproj \
 
 COPY src/GameShelf.Api/ src/GameShelf.Api/
 COPY tests/ tests/
+# The committed API contract, which OpenApiContractTests compares the running API against.
+COPY infra/openapi.json infra/openapi.json
 
 # Compile at image-build time: a build error fails `docker compose up --build` immediately,
 # and the entrypoint runs `dotnet test --no-build`, so the suites start the moment SQL Server is healthy.

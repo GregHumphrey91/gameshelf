@@ -15,7 +15,12 @@ describe('GameForm', () => {
     await userEvent.type(screen.getByTestId('input-value'), '19.99');
     await userEvent.click(screen.getByTestId('submit-game'));
 
-    expect(onSubmit).toHaveBeenCalledWith({ title: 'Celeste', platform: 'Switch', condition: 'Mint', estimatedValue: 19.99 });
+    expect(onSubmit).toHaveBeenCalledWith({
+      title: 'Celeste',
+      platform: 'Switch',
+      condition: 'Mint',
+      estimatedValue: 19.99,
+    });
     expect(screen.getByTestId('input-title')).toHaveValue('');
   });
 

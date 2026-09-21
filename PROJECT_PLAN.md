@@ -22,6 +22,12 @@ leaving resources running overnight does not.
 | Layer | Choice | Why |
 |---|---|---|
 | Frontend | React 19 + Vite (SPA), TypeScript | Familiar; fast feedback loop |
+| SPA routing | React Router | The sign-in redirect needs `/login/callback` to be a real route |
+| Server state | TanStack Query | Caching, retry policy and invalidation as configuration instead of hand-rolled effects |
+| SPA auth | `@okta/okta-react` over `@okta/okta-auth-js` | `<Security>` + `<LoginCallback>`; the app reads its own `AuthSession` context, never the SDK |
+| API contract | Committed `infra/openapi.json` → generated TypeScript types → MSW handler coverage | Mocked frontend tests stay a checked projection of the real API |
+| Logging | Serilog, compact JSON to stdout, correlation id on every line | Structured lines survive being shipped; a human-formatted template does not |
+| Telemetry | Azure Monitor OpenTelemetry, opt-in | Gated on the connection string, so local runs and tests stay silent |
 | Backend | ASP.NET Core Web API (.NET 8) | Typed, first-class Azure/EF tooling |
 | ORM / migrations | EF Core Code-First | Migration history lives in source control; `dotnet ef` bundles run anywhere |
 | Database | Azure SQL Database (serverless, auto-pause) | Entra-only auth; cheapest when idle |
@@ -36,10 +42,10 @@ leaving resources running overnight does not.
 | Suite | Where | What it proves |
 |---|---|---|
 | Backend unit | `tests/GameShelf.Api.Tests/Unit` | Controller / mapping logic in isolation (NSubstitute) |
-| Backend contract | `tests/GameShelf.Api.Tests/ContractTests` | Routes, status codes, JSON shape — real HTTP pipeline, every data dependency stubbed, database access is a test failure |
+| Backend contract | `tests/GameShelf.Api.Tests/ContractTests` | Routes, status codes, JSON shape, security headers, correlation ids, and that the running API still matches the committed `infra/openapi.json` — real HTTP pipeline, every data dependency stubbed, database access is a test failure |
 | Backend integration | `tests/GameShelf.Api.IntegrationTests` | Real CRUD round-trips against a real SQL Server; readiness check is genuine |
-| Frontend unit | `src/gameshelf-web/src/**/*.test.tsx` | Components and hooks (Vitest + Testing Library); the API is mocked with MSW, never with `vi.mock('fetch')` |
-| Frontend E2E | `src/gameshelf-web/e2e` | Playwright against the real API + database |
+| Frontend unit | `src/gameshelf-web/src/**/*.test.tsx` | Components and hooks (Vitest + Testing Library); the API is mocked with MSW, never with `vi.mock('fetch')`, and the mocks and generated types are checked against `infra/openapi.json` |
+| Frontend E2E | `src/gameshelf-web/e2e` | Playwright against the real API + database, plus what the web container owns: security headers, CSP, uncached runtime config |
 
 ---
 
@@ -164,7 +170,7 @@ gameshelf/
 
 ### Phase 2 — Okta OIDC + PKCE (≈1 session)
 
-- [x] SPA: `@okta/okta-auth-js` only (no router, no React binding), Authorization Code + PKCE, `/login/callback` handled at boot, access token attached as `Authorization: Bearer` by the API client (token accessor lives outside React in `src/api/token.ts`, so `src/api/` stays framework-free)
+- [x] SPA: `@okta/okta-react` (`<Security>`, `<LoginCallback>` on a real `/login/callback` route via React Router), Authorization Code + PKCE, access token attached as `Authorization: Bearer` by the API client (token accessor lives outside React in `src/api/token.ts`, so `src/api/` stays framework-free)
 - [x] Auth-disabled "local mode" (`Auth:Enabled=false`; SPA has no issuer/client id) so unit, contract, integration and E2E tests run without a real identity provider. Refused in Production.
 - [x] API: JWT bearer validation — issuer and audience from configuration, signing keys from the issuer's JWKS
 - [x] `Users` table (`OktaSubject`, `Email`, `Role`) + migration. Resolve the caller by `sub` and read the role **from this table**, never from token claims. Unknown subject → 403. `Auth:BootstrapCurators` creates the first Curator on first sign-in.
@@ -174,6 +180,24 @@ gameshelf/
 - [ ] Hand check: sign in locally with the real org (README → "Signing in with a real identity provider")
 
 **Acceptance:** log in locally via Okta; unauthenticated API calls get 401; a user in the `Users` table gets the role that table says; a valid token for an unknown user gets 403.
+
+### Phase 2.5 — Production-shaped plumbing ✅
+
+Done before any cloud resource exists, because each item is far cheaper to add now than to retrofit
+once a pipeline depends on the app's behaviour.
+
+- [x] Structured logging: Serilog, compact JSON to stdout, request logging with health probes demoted to Verbose
+- [x] `X-Correlation-Id` honoured inbound, echoed outbound, exposed through CORS, on every log line and in every problem response
+- [x] Unhandled exceptions become RFC 7807 problem details; the exception message never leaves Development
+- [x] Security headers on every API response; the web container builds its CSP at start-up (API and issuer origins are only known then)
+- [x] Azure Monitor OpenTelemetry + Application Insights sink, wired only when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set
+- [x] API contract spine: `infra/openapi.json` committed and checked against the running API, TypeScript types generated from it and drift-checked, MSW handlers checked for coverage — all inside the existing test containers
+- [x] SPA on `@okta/okta-react`, React Router and TanStack Query
+- [x] Prettier, plus a husky pre-commit hook running lint-staged
+
+**Acceptance:** `npm test` green; deliberately editing `infra/openapi.json` fails the backend suite; a stale `src/types/generated/api.ts` or a missing MSW handler fails the frontend suite.
+
+---
 
 ### Phase 3 — Azure infrastructure, public-first (≈1-2 sessions)
 

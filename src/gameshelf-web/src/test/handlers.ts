@@ -44,7 +44,12 @@ export function currentGames(): Game[] {
 
 function validationProblem(errors: Record<string, string[]>) {
   return HttpResponse.json(
-    { type: 'https://tools.ietf.org/html/rfc9110#section-15.5.1', title: 'One or more validation errors occurred.', status: 400, errors },
+    {
+      type: 'https://tools.ietf.org/html/rfc9110#section-15.5.1',
+      title: 'One or more validation errors occurred.',
+      status: 400,
+      errors,
+    },
     { status: 400, headers: { 'Content-Type': 'application/problem+json' } },
   );
 }

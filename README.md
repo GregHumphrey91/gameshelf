@@ -95,7 +95,7 @@ name, no published ports, throwaway SQL Server) so it never interferes with the 
 | Command | What starts | Results |
 |---|---|---|
 | `npm run test:backend` | `sqlserver` → `backend-tests` (unit + contract + integration) | `test-results/backend/*.trx` |
-| `npm run test:frontend` | `frontend-tests` (lint + typecheck + Vitest, API mocked with MSW) | console |
+| `npm run test:frontend` | `frontend-tests` (lint, format and typecheck, generated-types check, Vitest with the API mocked by MSW and the mocks checked against `infra/openapi.json`) | console |
 | `npm run test:e2e` | `sqlserver` → `api` → `web` → `e2e` (Playwright against the real images) | `src/gameshelf-web/playwright-report/` |
 | `npm test` | all three, one after another, with a pass/fail summary | both |
 

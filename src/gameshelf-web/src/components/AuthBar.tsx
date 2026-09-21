@@ -1,4 +1,4 @@
-import type { AuthStatus } from '@/auth/authClient';
+import type { AuthStatus } from '@/auth/session';
 import type { UserRole } from '@/types/user';
 
 interface AuthBarProps {

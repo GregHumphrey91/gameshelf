@@ -1,0 +1,7 @@
+dist
+coverage
+playwright-report
+test-results
+package-lock.json
+# Generated from infra/openapi.json; the drift check compares it byte for byte with fresh output.
+src/types/generated

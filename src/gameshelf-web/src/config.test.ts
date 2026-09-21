@@ -54,7 +54,10 @@ describe('getAuthConfig', () => {
   });
 
   it('prefers the runtime config over the build-time env', () => {
-    window.__GAMESHELF_CONFIG__ = { oktaIssuer: 'https://runtime.example/oauth2/default/', oktaClientId: 'runtime-client' };
+    window.__GAMESHELF_CONFIG__ = {
+      oktaIssuer: 'https://runtime.example/oauth2/default/',
+      oktaClientId: 'runtime-client',
+    };
     vi.stubEnv('VITE_OKTA_ISSUER', 'https://build.example/oauth2/default');
     vi.stubEnv('VITE_OKTA_CLIENT_ID', 'build-client');
 

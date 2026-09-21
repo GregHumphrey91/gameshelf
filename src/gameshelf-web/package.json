@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -p tsconfig.build.json && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc -b",
@@ -13,12 +13,19 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "check": "npm run lint && npm run typecheck && npm test"
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "generate:types": "openapi-typescript ../../infra/openapi.json -o src/types/generated/api.ts",
+    "generate:types:check": "node scripts/check-generated-types.mjs",
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm run generate:types:check && npm test"
   },
   "dependencies": {
     "@okta/okta-auth-js": "^8.0.1",
+    "@okta/okta-react": "^6.11.0",
+    "@tanstack/react-query": "^5.103.1",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.28.0",
@@ -36,6 +43,8 @@
     "globals": "^16.2.0",
     "jsdom": "^26.1.0",
     "msw": "^2.10.2",
+    "openapi-typescript": "^7.13.0",
+    "prettier": "^3.9.8",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.34.0",
     "vite": "^6.3.5",

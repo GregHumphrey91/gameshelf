@@ -2,7 +2,7 @@
 #
 #   npm test                 all three suites, one after another
 #   npm run test:backend     unit + contract + integration     sqlserver → backend-tests
-#   npm run test:frontend    lint + typecheck + Vitest          frontend-tests
+#   npm run test:frontend    lint + typecheck + contract + Vitest  frontend-tests
 #   npm run test:e2e         Playwright                         sqlserver → api → web → e2e
 #
 # Those scripts call scripts/docker-test.mjs, which runs
@@ -54,11 +54,12 @@ services:
       sqlserver:
         condition: service_healthy
 
-  # ---- frontend: lint + typecheck + Vitest ---------------------------------
+  # ---- frontend: lint + typecheck + generated-types check + Vitest ----------
   frontend-tests:
     build:
-      context: src/gameshelf-web
-      target: test
+      # Repo-root context: the suite checks generated types and mock handlers against infra/openapi.json.
+      context: .
+      dockerfile: src/gameshelf-web/Dockerfile.test
     profiles: [frontend]
     environment:
       CI: "true"
