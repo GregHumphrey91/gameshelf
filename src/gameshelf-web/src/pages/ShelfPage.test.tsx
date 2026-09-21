@@ -7,7 +7,7 @@ import { FakeAuthClient, renderApp, SIGNED_IN, SIGNED_OUT } from '@/test/auth';
 import { currentGames, seedGames, setCurrentUser } from '@/test/handlers';
 import { server } from '@/test/server';
 
-describe('App', () => {
+describe('ShelfPage', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('shows the empty state after loading an empty collection', async () => {
@@ -72,7 +72,9 @@ describe('App', () => {
   });
 
   it('surfaces API errors', async () => {
-    server.use(http.get(`${TEST_API_BASE}/api/games`, () => HttpResponse.json({ title: 'Database offline' }, { status: 503 })));
+    server.use(
+      http.get(`${TEST_API_BASE}/api/games`, () => HttpResponse.json({ title: 'Database offline' }, { status: 503 })),
+    );
     renderApp();
 
     expect(await screen.findByTestId('error')).toHaveTextContent('Database offline');

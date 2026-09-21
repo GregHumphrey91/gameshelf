@@ -10,6 +10,9 @@
 .git/
 .github/
 infra/
+# The committed API contract: the backend test image diffs the live document against it, the
+# frontend test image regenerates types and MSW coverage from it.
+!infra/openapi.json
 scripts/
 docs/
 *.md

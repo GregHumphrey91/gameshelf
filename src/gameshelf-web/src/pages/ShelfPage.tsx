@@ -7,7 +7,7 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useGames } from '@/hooks/useGames';
 import type { Game, GameInput } from '@/types/game';
 
-export default function App() {
+export function ShelfPage() {
   const auth = useAuth();
   const signedIn = auth.status === 'signed-in';
 
@@ -73,8 +73,8 @@ export default function App() {
         <section className="card" data-testid="no-access">
           <h2>No access yet</h2>
           <p className="empty">
-            You are signed in as <strong data-testid="no-access-subject">{user?.email ?? user?.subject}</strong>, but this
-            account has not been granted access. Ask a curator to add it.
+            You are signed in as <strong data-testid="no-access-subject">{user?.email ?? user?.subject}</strong>, but
+            this account has not been granted access. Ask a curator to add it.
           </p>
         </section>
       ) : (
