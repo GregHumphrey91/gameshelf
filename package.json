@@ -3,7 +3,7 @@
   "private": true,
   "description": "Root task runner. Every script works from any shell (cmd, PowerShell, Git Bash, CI). Tests run in containers only.",
   "scripts": {
-    "setup": "dotnet tool restore && dotnet restore GameShelf.sln && npm --prefix src/gameshelf-web ci --no-audit --no-fund",
+    "setup": "npm install --no-audit --no-fund && dotnet tool restore && dotnet restore GameShelf.sln && npm --prefix src/gameshelf-web ci --no-audit --no-fund",
 
     "db:up": "docker compose up -d --wait sqlserver",
     "db:down": "docker compose stop sqlserver",
@@ -15,7 +15,12 @@
     "dev:web": "npm --prefix src/gameshelf-web run dev",
 
     "build": "dotnet build GameShelf.sln && npm --prefix src/gameshelf-web run build",
-    "lint": "npm --prefix src/gameshelf-web run lint && npm --prefix src/gameshelf-web run typecheck",
+    "lint": "npm --prefix src/gameshelf-web run lint && npm --prefix src/gameshelf-web run format:check && npm --prefix src/gameshelf-web run typecheck",
+    "format": "npm --prefix src/gameshelf-web run format",
+
+    "openapi:generate": "node scripts/generate-openapi.mjs",
+    "generate:types": "npm --prefix src/gameshelf-web run generate:types",
+    "contract:update": "npm run openapi:generate && npm run generate:types",
 
     "test": "node scripts/docker-test.mjs all",
     "test:backend": "node scripts/docker-test.mjs backend",
@@ -24,6 +29,21 @@
     "test:down": "docker compose -f docker-compose.test.yml --profile backend --profile frontend --profile e2e down --volumes --remove-orphans",
 
     "bicep:build": "az bicep build --file infra/bicep/main.bicep && az bicep build-params --file infra/bicep/env/dev.bicepparam",
-    "ci:local": "npm run lint && npm test && npm run bicep:build"
+    "ci:local": "npm run lint && npm test && npm run bicep:build",
+
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0"
+  },
+  "lint-staged": {
+    "src/gameshelf-web/**/*.{ts,tsx}": [
+      "src/gameshelf-web/node_modules/.bin/prettier --write --ignore-path src/gameshelf-web/.prettierignore",
+      "src/gameshelf-web/node_modules/.bin/eslint --fix --no-warn-ignored --config src/gameshelf-web/eslint.config.js"
+    ],
+    "src/gameshelf-web/**/*.{json,css,md,mjs}": [
+      "src/gameshelf-web/node_modules/.bin/prettier --write --ignore-path src/gameshelf-web/.prettierignore"
+    ]
   }
 }

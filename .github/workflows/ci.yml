@@ -1,8 +1,8 @@
 # Continuous integration — runs on every push and pull request. Needs no cloud credentials.
 #
 #   tests   every suite inside docker-compose.test.yml, exactly what `npm test` runs locally:
-#             backend   unit + contract + integration (against a throwaway SQL Server)
-#             frontend  lint + typecheck + unit tests
+#             backend   unit + contract (incl. OpenAPI drift) + integration (against a throwaway SQL Server)
+#             frontend  lint + format + typecheck + generated-types check + unit tests
 #             e2e       Playwright against the real API and web images
 #           Building the stack also proves both production images build.
 #   bicep   templates compile
